@@ -4,6 +4,7 @@ from bot.config import BOT_TOKEN
 from bot.handlers.start import router as start_router
 
 print("REDEPLOY TEST")
+print("TOKEN FROM ENV:", repr(BOT_TOKEN))
 
 
 async def main():
