@@ -1,10 +1,12 @@
+import os
 import asyncio
 from aiogram import Bot, Dispatcher
 from bot.config import BOT_TOKEN
 from bot.handlers.start import router as start_router
 
 print("REDEPLOY TEST")
-print("TOKEN FROM ENV:", repr(BOT_TOKEN))
+print("ENV BOT_TOKEN:", os.getenv("BOT_TOKEN"))
+print("CONFIG BOT_TOKEN:", BOT_TOKEN, type(BOT_TOKEN))
 
 
 async def main():
