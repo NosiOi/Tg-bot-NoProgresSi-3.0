@@ -10,6 +10,6 @@ router = Router()
 @router.message(Command("start"))
 async def start_cmd(message: Message):
     await message.answer(
-        "Привіт! Обери дію з меню нижче:",
+        "Дайбоже! Обери дію з меню нижче:",
         reply_markup=main_menu
     )
