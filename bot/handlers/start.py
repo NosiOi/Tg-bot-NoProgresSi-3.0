@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
 
-from bot.keyboards.main_menu import main_menu
+from bot.keyboards.language_menu import language_menu
 
 router = Router()
 
@@ -10,6 +10,6 @@ router = Router()
 @router.message(Command("start"))
 async def start_cmd(message: Message):
     await message.answer(
-        "Дайбоже! Обери дію з меню нижче:",
-        reply_markup=main_menu
+        "Welcome! Please choose your language:",
+        reply_markup=language_menu
     )
