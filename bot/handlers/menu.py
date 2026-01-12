@@ -1,5 +1,6 @@
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram import Router
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 
@@ -8,10 +9,44 @@ from bot.keyboards.main_menu import main_menu
 from bot.keyboards.language_menu import language_menu
 from bot.keyboards.delete_buttons import delete_button
 
+
 router = Router()
 
 
+def after_add_menu(lang: str):
+    texts = {
+        "en": ["Add another task", "Main menu"],
+        "uk": ["Додати ще одну", "Головне меню"],
+        "pl": ["Dodać kolejne", "Menu główne"],
+        "ru": ["Добавить ещё одну", "Главное меню"],
+    }
+
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=texts[lang][0])],
+            [KeyboardButton(text=texts[lang][1])]
+        ],
+        resize_keyboard=True
+    )
+
+
+def back_button(lang: str):
+    texts = {
+        "en": "Back",
+        "uk": "Назад",
+        "pl": "Wróć",
+        "ru": "Назад",
+    }
+
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=texts[lang])]],
+        resize_keyboard=True
+    )
+
+
 # FSM для задач
+
+
 class AddGoalStates(StatesGroup):
     waiting_for_text = State()
 
@@ -165,9 +200,12 @@ async def choose_task_type(message: Message, state: FSMContext):
 
     await message.answer(ask_text[lang])
     await state.set_state(AddGoalWithDate.waiting_for_text)
-
+    await message.answer(ask_text[lang], reply_markup=back_button(lang))
+    await message.answer(ask_text[lang], reply_markup=back_button(lang))
 
 # Введення тексту задачі
+
+
 @router.message(AddGoalWithDate.waiting_for_text)
 async def process_text(message: Message, state: FSMContext):
     lang = get_language(message.from_user.id)
@@ -179,7 +217,19 @@ async def process_text(message: Message, state: FSMContext):
     if data["type"] == "simple":
         add_goal(message.from_user.id, text)
         await state.clear()
-        await message.answer({"en": "Task added.", "uk": "Задачу додано.", "pl": "Zadanie dodane.", "ru": "Задача добавлена."}[lang])
+
+        await message.answer(
+            {"en": "Task added.", "uk": "Задачу додано.",
+             "pl": "Zadanie dodane.", "ru": "Задача добавлена."}[lang]
+        )
+
+        await message.answer(
+            {"en": "Do you want to add another task or return to the main menu?",
+             "uk": "Ти хочеш додати ще одну задачу, чи повернутись до головного меню?",
+             "pl": "Chcesz dodać kolejne zadanie czy wrócić do menu głównego?",
+             "ru": "Хочешь добавить ещё одну задачу или вернуться в главное меню?"}[lang],
+            reply_markup=after_add_menu(lang)
+        )
         return
 
     if data["type"] == "dated":
@@ -221,6 +271,14 @@ async def save_dated_task(message: Message, state: FSMContext):
         "ru": "Задача с датой добавлена.",
     }[lang])
 
+    await message.answer(
+        {"en": "Do you want to add another task or return to the main menu?",
+         "uk": "Ти хочеш додати ще одну задачу, чи повернутись до головного меню?",
+         "pl": "Chcesz dodać kolejne zadanie czy wrócić do menu głównego?",
+         "ru": "Хочешь добавить ещё одну задачу или вернуться в главное меню?"}[lang],
+        reply_markup=after_add_menu(lang)
+    )
+
 
 # Повторювана задача
 @router.message(AddGoalWithDate.waiting_for_periodicity)
@@ -250,6 +308,13 @@ async def save_repeating_task(message: Message, state: FSMContext):
         "pl": "Zadanie cykliczne dodane.",
         "ru": "Повторяющаяся задача добавлена.",
     }[lang])
+    await message.answer(
+        {"en": "Do you want to add another task or return to the main menu?",
+         "uk": "Ти хочеш додати ще одну задачу, чи повернутись до головного меню?",
+         "pl": "Chcesz dodać kolejne zadanie czy wrócić do menu głównego?",
+         "ru": "Хочешь добавить ещё одну задачу или вернуться в главное меню?"}[lang],
+        reply_markup=after_add_menu(lang)
+    )
 
 
 # Статистика
@@ -333,3 +398,16 @@ async def delete_goal_callback(callback: CallbackQuery):
 
     await callback.message.edit_text(texts[lang])
     await callback.answer()
+
+# Обробник кнопки назад
+
+
+@router.message(lambda msg: msg.text in ["Назад", "Back", "Wróć", "Назад"])
+async def go_back(message: Message, state: FSMContext):
+    lang = get_language(message.from_user.id)
+    await state.clear()
+    await message.answer(
+        {"en": "Main menu:", "uk": "Головне меню:",
+            "pl": "Menu główne:", "ru": "Главное меню:"}[lang],
+        reply_markup=main_menu(lang)
+    )
