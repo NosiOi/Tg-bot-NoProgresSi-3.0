@@ -1,4 +1,3 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram import Router
 from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import StatesGroup, State
@@ -9,9 +8,10 @@ from bot.keyboards.main_menu import main_menu
 from bot.keyboards.language_menu import language_menu
 from bot.keyboards.delete_buttons import delete_button
 
-
 router = Router()
 
+
+# Клавіатури
 
 def after_add_menu(lang: str):
     texts = {
@@ -44,8 +44,7 @@ def back_button(lang: str):
     )
 
 
-# FSM для задач
-
+# FSM
 
 class AddGoalStates(StatesGroup):
     waiting_for_text = State()
@@ -58,7 +57,67 @@ class AddGoalWithDate(StatesGroup):
     waiting_for_periodicity = State()
 
 
+# Універсальний хендлер "Назад"
+
+@router.message(lambda msg: msg.text in ["Назад", "Back", "Wróć", "Главное меню"])
+async def go_back(message: Message, state: FSMContext):
+    lang = get_language(message.from_user.id)
+    current = await state.get_state()
+
+    # Повернення з введення тексту / дати / періодичності → назад до вибору типу
+    if current in [
+        AddGoalWithDate.waiting_for_text.state,
+        AddGoalWithDate.waiting_for_date.state,
+        AddGoalWithDate.waiting_for_periodicity.state
+    ]:
+        await state.set_state(AddGoalWithDate.choose_type)
+        texts = {
+            "en": "Choose task type:",
+            "uk": "Обери тип задачі:",
+            "pl": "Wybierz typ zadania:",
+            "ru": "Выбери тип задачи:",
+        }
+
+        types = {
+            "en": ["Simple task", "Task with date", "Repeating task"],
+            "uk": ["Звичайна задача", "Задача з датою", "Повторювана задача"],
+            "pl": ["Zwykłe zadanie", "Zadanie z datą", "Zadanie cykliczne"],
+            "ru": ["Обычная задача", "Задача с датой", "Повторяющаяся задача"],
+        }
+
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text=types[lang][0])],
+                [KeyboardButton(text=types[lang][1])],
+                [KeyboardButton(text=types[lang][2])],
+            ],
+            resize_keyboard=True
+        )
+
+        await message.answer(texts[lang], reply_markup=keyboard)
+        return
+
+    # Якщо користувач у виборі типу → головне меню
+    if current == AddGoalWithDate.choose_type.state:
+        await state.clear()
+        await message.answer(
+            {"en": "Main menu:", "uk": "Головне меню:",
+             "pl": "Menu główne:", "ru": "Главное меню:"}[lang],
+            reply_markup=main_menu(lang)
+        )
+        return
+
+    # Якщо немає стану → головне меню
+    await state.clear()
+    await message.answer(
+        {"en": "Main menu:", "uk": "Головне меню:",
+         "pl": "Menu główne:", "ru": "Главное меню:"}[lang],
+        reply_markup=main_menu(lang)
+    )
+
+
 # Вибір мови
+
 @router.message(lambda msg: msg.text in [
     "🇺🇦 Ukrainian", "🇬🇧 English", "🇵🇱 Polish", "🇷🇺 Russian"
 ])
@@ -86,6 +145,7 @@ async def choose_language(message: Message):
 
 
 # Мої цілі
+
 @router.message(lambda msg: msg.text in ["Мої цілі", "My goals", "Moje cele", "Мои цели"])
 async def goals(message: Message):
     user_id = message.from_user.id
@@ -135,6 +195,7 @@ async def goals(message: Message):
 
 
 # Додати задачу → вибір типу
+
 @router.message(lambda msg: msg.text in ["Додати задачу", "Add task", "Dodaj zadanie", "Добавить задачу"])
 async def add_task_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -146,8 +207,6 @@ async def add_task_start(message: Message, state: FSMContext):
         "pl": "Wybierz typ zadania:",
         "ru": "Выбери тип задачи:",
     }
-
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
     types = {
         "en": ["Simple task", "Task with date", "Repeating task"],
@@ -170,6 +229,7 @@ async def add_task_start(message: Message, state: FSMContext):
 
 
 # Обробка вибору типу задачі
+
 @router.message(AddGoalWithDate.choose_type)
 async def choose_task_type(message: Message, state: FSMContext):
     lang = get_language(message.from_user.id)
@@ -198,13 +258,11 @@ async def choose_task_type(message: Message, state: FSMContext):
         "ru": "Введите название задачи:",
     }
 
-    await message.answer(ask_text[lang])
     await state.set_state(AddGoalWithDate.waiting_for_text)
     await message.answer(ask_text[lang], reply_markup=back_button(lang))
-    await message.answer(ask_text[lang], reply_markup=back_button(lang))
 
-# Введення тексту задачі
 
+# Введення тексту задачі-
 
 @router.message(AddGoalWithDate.waiting_for_text)
 async def process_text(message: Message, state: FSMContext):
@@ -214,6 +272,7 @@ async def process_text(message: Message, state: FSMContext):
     await state.update_data(text=text)
     data = await state.get_data()
 
+    # Simple task
     if data["type"] == "simple":
         add_goal(message.from_user.id, text)
         await state.clear()
@@ -232,6 +291,7 @@ async def process_text(message: Message, state: FSMContext):
         )
         return
 
+# Dated task
     if data["type"] == "dated":
         ask_date = {
             "en": "Enter date (DD-MM-YYYY):",
@@ -239,10 +299,11 @@ async def process_text(message: Message, state: FSMContext):
             "pl": "Wpisz datę (DD-MM-RRRR):",
             "ru": "Введите дату (ДД-ММ-ГГГГ):",
         }
-        await message.answer(ask_date[lang])
         await state.set_state(AddGoalWithDate.waiting_for_date)
+        await message.answer(ask_date[lang], reply_markup=back_button(lang))
         return
 
+# Repeating task
     if data["type"] == "repeating":
         ask_period = {
             "en": "Choose repetition: daily / weekly / monthly / yearly",
@@ -250,11 +311,13 @@ async def process_text(message: Message, state: FSMContext):
             "pl": "Wybierz powtarzanie: codziennie / co tydzień / co miesiąc / co rok",
             "ru": "Выбери повторение: ежедневно / еженедельно / ежемесячно / ежегодно",
         }
-        await message.answer(ask_period[lang])
         await state.set_state(AddGoalWithDate.waiting_for_periodicity)
+        await message.answer(ask_period[lang], reply_markup=back_button(lang))
 
 
 # Задача з датою
+
+
 @router.message(AddGoalWithDate.waiting_for_date)
 async def save_dated_task(message: Message, state: FSMContext):
     lang = get_language(message.from_user.id)
@@ -281,6 +344,8 @@ async def save_dated_task(message: Message, state: FSMContext):
 
 
 # Повторювана задача
+
+
 @router.message(AddGoalWithDate.waiting_for_periodicity)
 async def save_repeating_task(message: Message, state: FSMContext):
     lang = get_language(message.from_user.id)
@@ -294,7 +359,12 @@ async def save_repeating_task(message: Message, state: FSMContext):
     }
 
     if periodicity not in mapping:
-        await message.answer({"en": "Invalid option.", "uk": "Невірний варіант.", "pl": "Nieprawidłowa opcja.", "ru": "Неверный вариант."}[lang])
+        await message.answer({
+            "en": "Invalid option.",
+            "uk": "Невірний варіант.",
+            "pl": "Nieprawidłowa opcja.",
+            "ru": "Неверный вариант."
+        }[lang])
         return
 
     data = await state.get_data()
@@ -308,6 +378,7 @@ async def save_repeating_task(message: Message, state: FSMContext):
         "pl": "Zadanie cykliczne dodane.",
         "ru": "Повторяющаяся задача добавлена.",
     }[lang])
+
     await message.answer(
         {"en": "Do you want to add another task or return to the main menu?",
          "uk": "Ти хочеш додати ще одну задачу, чи повернутись до головного меню?",
@@ -318,6 +389,8 @@ async def save_repeating_task(message: Message, state: FSMContext):
 
 
 # Статистика
+
+
 @router.message(lambda msg: msg.text in ["Статистика", "Statistics", "Statystyki", "Статистика"])
 async def stats(message: Message):
     user_id = message.from_user.id
@@ -337,6 +410,7 @@ async def stats(message: Message):
 
 
 # Налаштування
+
 @router.message(lambda msg: msg.text in ["Settings", "Налаштування", "Ustawienia", "Настройки"])
 async def settings_menu(message: Message):
     lang = get_language(message.from_user.id)
@@ -347,8 +421,6 @@ async def settings_menu(message: Message):
         "pl": "Ustawienia:\n• Zmień język",
         "ru": "Настройки:\n• Изменить язык",
     }
-
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
     change_lang_btn = {
         "en": "Change language",
@@ -366,6 +438,7 @@ async def settings_menu(message: Message):
 
 
 # Змінити мову
+
 @router.message(lambda msg: msg.text in ["Change language", "Змінити мову", "Zmień język", "Изменить язык"])
 async def change_language(message: Message):
     lang = get_language(message.from_user.id)
@@ -374,40 +447,5 @@ async def change_language(message: Message):
         "en": "Choose your language:",
         "uk": "Обери мову:",
         "pl": "Wybierz język:",
-        "ru": "Выбери язык:",
+        "ru": "Выберите язык:",
     }
-
-    await message.answer(texts[lang], reply_markup=language_menu)
-
-
-# Видалення задачі
-@router.callback_query(lambda c: c.data.startswith("del:"))
-async def delete_goal_callback(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    lang = get_language(user_id)
-
-    goal_id = int(callback.data.split(":")[1])
-    delete_goal(goal_id, user_id)
-
-    texts = {
-        "en": "Goal deleted.",
-        "uk": "Ціль видалено.",
-        "pl": "Cel usunięty.",
-        "ru": "Цель удалена.",
-    }
-
-    await callback.message.edit_text(texts[lang])
-    await callback.answer()
-
-# Обробник кнопки назад
-
-
-@router.message(lambda msg: msg.text in ["Назад", "Back", "Wróć", "Назад"])
-async def go_back(message: Message, state: FSMContext):
-    lang = get_language(message.from_user.id)
-    await state.clear()
-    await message.answer(
-        {"en": "Main menu:", "uk": "Головне меню:",
-            "pl": "Menu główne:", "ru": "Главное меню:"}[lang],
-        reply_markup=main_menu(lang)
-    )
